@@ -17,12 +17,12 @@ function UserProfile() {
     setUsername(savedUsername);
     fetchRecipes();
   }
-}, []);
+}, [navigate]);
 
   const fetchRecipes = async () => {
   try {
     const token = localStorage.getItem("token");
-    console.log("Using Token:", token);
+   
 
     const res = await API.get("/api/chef/my-recipes", {
       headers: {
@@ -40,15 +40,18 @@ function UserProfile() {
 };
 
   const handleDelete = async (id) => {
+   
     try {
-      await API.delete(`/api/user/recipe/${id}`);
+      await API.delete(`/api/chef/delete/${id}`);
       fetchRecipes(); // refresh list
+      alert("Recipe deleted successfully ✅");
     } catch (error) {
-      console.error(error);
+      console.error("Delete error:", error);
+      alert("Failed to delete recipe ❌");
     }
   };
 
-  const handleLogout = () => {
+  const   handleLogout = () => {
     localStorage.removeItem("token");
     navigate("/login");
   };
@@ -87,7 +90,9 @@ function UserProfile() {
                 <div className="card-body">
 
                   <h5 className="fw-bold text-primary">
-                    👨‍🍳 {recipe.chefName}
+
+                    {/* here need to add recipe name  */}
+                     {recipe.name}
                   </h5>
 
                   <p className="text-muted">
@@ -116,11 +121,13 @@ function UserProfile() {
                     </button>
 
                     <button
-                      className="btn btn-danger btn-sm"
+                      className="btn btn-danger btn-sm"      
                       onClick={() => handleDelete(recipe.id)}
                     >
+                  
                       Delete
                     </button>
+                  
                   </div>
 
                 </div>

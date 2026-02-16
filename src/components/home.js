@@ -64,7 +64,7 @@ function Home() {
       {/* CTA */}
       <section className="bg-warning text-center py-5">
         <h2 className="fw-bold">Ready to Add Your Recipe?</h2>
-        <Link to="/add" className="btn btn-dark btn-lg mt-3 px-5">
+        <Link to="/login" className="btn btn-dark btn-lg mt-3 px-5">
           Add Recipe
         </Link>
       </section>

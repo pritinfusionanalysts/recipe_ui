@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import API from "../api/api";
 
-function AddRecipe() {
+function UpdateRecipe() {
   const navigate = useNavigate();
+  const { id } = useParams();
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -12,8 +13,8 @@ function AddRecipe() {
   ]);
   const [ingredientOptions, setIngredientOptions] = useState([]);
   const [loading, setLoading] = useState(false);
-
-  // 🔐 Protect page + fetch ingredients
+  const [recipeLoading, setRecipeLoading] = useState(true);
+  // 🔐 Protect page + fetch recipe then ingredients, map names -> ids
   useEffect(() => {
     const token = localStorage.getItem("token");
 
@@ -22,21 +23,76 @@ function AddRecipe() {
       return;
     }
 
-    fetchIngredients();
-  }, [navigate]);
+    const load = async () => {
+      try {
+        setRecipeLoading(true);
 
-  // ✅ Fetch Ingredients (Token auto attached)
-  const fetchIngredients = async () => {
-    try {
-      const res = await API.get("/api/ingredient");
-      const data = res && res.data ? res.data : [];
-      const normalized = Array.isArray(data) ? data : [];
-      setIngredientOptions(normalized);
-      console.log("Fetched ingredients:", normalized);
-    } catch (error) {
-      console.error("Failed to fetch ingredients", error);
-    }
-  };
+        // 1) Fetch recipe by trying multiple possible endpoints (fallback)
+        let recipe = null;
+        const candidateEndpoints = [
+          `/api/chef/recipe/${id}`,
+          `/api/chef/update/${id}`,
+          `/api/chef/${id}`
+        ];
+
+        for (const ep of candidateEndpoints) {
+          try {
+            const r = await API.get(ep);
+            recipe = r.data || {};
+            console.log(`Fetched recipe from ${ep}`, recipe);
+            break;
+          } catch (err) {
+            console.warn(`GET ${ep} failed:`, err.response?.status, err.response?.data || err.message);
+            // try next endpoint
+          }
+        }
+
+        if (!recipe) {
+          throw new Error('Recipe not found on any known endpoint');
+        }
+
+        setName(recipe.name || "");
+        setDescription(recipe.description || "");
+
+        // create baseline ingredient rows preserving original names
+        const originalIngredients = Array.isArray(recipe.ingredients) ? recipe.ingredients : [];
+        const baseline = originalIngredients.length > 0
+          ? originalIngredients.map((ing) => ({ ingredientId: "", quantity: ing.quantity || "", originalName: ing.name || ing.label || "" }))
+          : [{ ingredientId: "", quantity: "", originalName: "" }];
+
+        setIngredients(baseline);
+        console.log("Recipe baseline:", recipe);
+
+        // 2) Fetch ingredient options and map names -> ids
+        const res = await API.get("/api/ingredient");
+        const data = res && res.data ? res.data : [];
+        const normalized = Array.isArray(data) ? data : [];
+        setIngredientOptions(normalized);
+
+        // map baseline rows to ingredientIds where possible
+        const mapped = baseline.map((row) => {
+          if (!row.originalName) return row;
+          const match = normalized.find((opt) => String(opt.name).toLowerCase() === String(row.originalName).toLowerCase());
+          return {
+            ...row,
+            ingredientId: match ? (match.id ?? match._id ?? match.ingredientId ?? "") : ""
+          };
+        });
+
+        setIngredients(mapped);
+        console.log("Ingredient options:", normalized);
+        console.log("Mapped ingredients:", mapped);
+      } catch (error) {
+        console.error("Failed to load recipe or ingredients", error);
+        alert("Failed to load recipe ❌");
+        navigate("/UserProfile");
+      } finally {
+        setRecipeLoading(false);
+      }
+    };
+
+    load();
+  }, [navigate, id]);
 
   const handleAddIngredient = () => {
     setIngredients([...ingredients, { ingredientId: "", quantity: "" }]);
@@ -58,7 +114,7 @@ function AddRecipe() {
     return new Set(ids).size !== ids.length;
   };
 
-  // ✅ Submit Recipe (Token auto attached)
+  // ✅ Update Recipe
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -86,7 +142,6 @@ function AddRecipe() {
 
       // Validate ingredient IDs before sending to backend
       const invalid = ingredients.some((it) => {
-        // treat empty strings, null, undefined or non-numeric values as invalid
         return it.ingredientId === "" || it.ingredientId == null || isNaN(Number(it.ingredientId));
       });
 
@@ -96,27 +151,32 @@ function AddRecipe() {
         return;
       }
 
-      console.log("Submitting recipe payload:", payload);
+      console.log("Updating recipe payload:", payload);
 
-      await API.post("/api/chef/save", payload);
+      await API.put(`/api/chef/update/${id}`, payload);
 
-      alert("Recipe Added Successfully ✅");
+      alert("Recipe Updated Successfully ✅");
       navigate("/UserProfile");
 
     } catch (error) {
       console.error(error);
-    
-      console.log("data:" , payload);
-      //alert("Failed to add recipe ❌");
-    } 
-    /*finally {
+      alert("Failed to update recipe ❌");
+    } finally {
       setLoading(false);
-    }*/
+    }
   };
+
+  if (recipeLoading) {
+    return (
+      <div className="container mt-4">
+        <h3>Loading recipe...</h3>
+      </div>
+    );
+  }
 
   return (
     <div className="container mt-4">
-      <h3 className="mb-4">Add New Recipe 🍽</h3>
+      <h3 className="mb-4">Update Recipe 🍽</h3>
 
       <form onSubmit={handleSubmit}>
 
@@ -217,7 +277,7 @@ function AddRecipe() {
             className="btn btn-success"
             disabled={loading}
           >
-            {loading ? "Saving..." : "Save Recipe"}
+            {loading ? "Updating..." : "Update Recipe"}
           </button>
         </div>
 
@@ -226,4 +286,4 @@ function AddRecipe() {
   );
 }
 
-export default AddRecipe;
+export default UpdateRecipe;
